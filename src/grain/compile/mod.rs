@@ -310,6 +310,9 @@ struct Lowering {
     positions: Vec<Position>,
     residuals: Vec<Expr>,
     consts: Vec<Dynamic>,
+    /// `consts` by their rendering, to find a duplicate without rendering
+    /// every constant already pooled again.
+    const_index: std::collections::BTreeMap<String, u32>,
     names: Vec<ImmutableString>,
     tokens: Vec<Token>,
     assign_ops: Vec<AssignOp>,
@@ -2443,22 +2446,18 @@ impl Lowering {
         if let Some(required_caps) = constant_caps(&value) {
             self.caps.insert(required_caps);
         }
-        // Programs at this scale make a linear scan cheaper than a hash map,
-        // and it keeps the pool in emission order for readable disassembly.
+        // Each constant is rendered once, when it is first pooled: a scan that
+        // rendered every pooled constant again for each new one was quadratic,
+        // and a map literal's template (every key) is one of them. The pool
+        // itself stays in emission order, for readable disassembly.
         let rendered = format!("{value:?}");
-        // Use a buffer to avoid allocating a new string for every comparison.
-        let mut buf = String::new();
-        if let Some(index) = self.consts.iter().position(|existing| {
-            use std::fmt::Write;
-
-            buf.clear();
-            write!(&mut buf, "{existing:?}").expect("writing to a string cannot fail");
-            buf == rendered
-        }) {
-            return index as u32;
+        if let Some(&index) = self.const_index.get(&rendered) {
+            return index;
         }
         self.consts.push(value);
-        (self.consts.len() - 1) as u32
+        let index = (self.consts.len() - 1) as u32;
+        self.const_index.insert(rendered, index);
+        index
     }
 
     fn push_name(&mut self, name: ImmutableString) -> u32 {
