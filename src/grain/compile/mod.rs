@@ -2451,6 +2451,12 @@ impl Lowering {
         if let Some(index) = self.consts.iter().position(|existing| {
             use std::fmt::Write;
 
+            // A constant of another type is never a duplicate: skip it without
+            // rendering it (a map literal's template, holding every key, is in
+            // the pool and costly to render).
+            if existing.type_id() != value.type_id() {
+                return false;
+            }
             buf.clear();
             write!(&mut buf, "{existing:?}").expect("writing to a string cannot fail");
             buf == rendered
