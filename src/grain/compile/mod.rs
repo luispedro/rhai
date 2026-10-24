@@ -2457,6 +2457,13 @@ impl Lowering {
             if existing.type_id() != value.type_id() {
                 return false;
             }
+            // Most of the pool is strings: compare those directly.
+            if let (Ok(a), Ok(b)) = (
+                existing.as_immutable_string_ref(),
+                value.as_immutable_string_ref(),
+            ) {
+                return *a == *b;
+            }
             buf.clear();
             write!(&mut buf, "{existing:?}").expect("writing to a string cannot fail");
             buf == rendered
